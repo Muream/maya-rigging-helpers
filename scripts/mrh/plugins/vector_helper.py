@@ -18,7 +18,9 @@ class VectorHelperNode(omui.MPxLocatorNode):
     DRAW_REGISTRANT_ID = "VectorHelperNode"
 
     radius = None
-    height = None
+
+    origin = None
+
     colorR = None
     colorG = None
     colorB = None
@@ -37,19 +39,20 @@ class VectorHelperNode(omui.MPxLocatorNode):
             "radius", "r", om.MFnUnitAttribute.kDistance
         )
         unitFn.channelBox = True
-        unitFn.default = om.MDistance(1)
+        unitFn.default = om.MDistance(0.1)
         unitFn.setMin(om.MDistance(0))
         om.MPxNode.addAttribute(VectorHelperNode.radius)
 
-        VectorHelperNode.height = unitFn.create(
-            "height", "h", om.MFnUnitAttribute.kDistance
-        )
-        unitFn.default = om.MDistance(1)
-        unitFn.setMin(om.MDistance(0))
-        unitFn.channelBox = True
-        om.MPxNode.addAttribute(VectorHelperNode.height)
-
         numericFn = om.MFnNumericAttribute()
+
+        VectorHelperNode.origin = numericFn.createPoint("origin", "o")
+        numericFn.channelBox = True
+        om.MPxNode.addAttribute(VectorHelperNode.origin)
+
+        VectorHelperNode.target = numericFn.createPoint("target", "t")
+        numericFn.channelBox = True
+        om.MPxNode.addAttribute(VectorHelperNode.target)
+
         VectorHelperNode.colorR = numericFn.create(
             "colorR", "cr", om.MFnNumericData.kFloat, 1
         )
@@ -89,21 +92,61 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
         data.triangles_indices = []
         data.lines_indices = []
 
-        radius = VectorHelperDrawOverride._get_radius(obj_path)
-        height = VectorHelperDrawOverride._get_height(obj_path)
-        cylinder_height = max(0, height - radius * 3)
+        data = self._generate_points(data, obj_path)
+        data = self._generate_triangles(data)
 
+        return data
+
+    def _get_aim_matrix(self, obj_path):
+        origin = self._get_origin(obj_path)
+        target = self._get_target(obj_path)
+
+        aim_vector = om.MVector(target - origin).normalize()
+
+        world_up = om.MGlobal.upAxis()
+        if aim_vector.isParallel(world_up):
+            world_up.x += 1
+            world_up.normalize()
+
+        up_vector = (aim_vector ^ world_up).normalize()
+        last_vector = (aim_vector ^ up_vector).normalize()
+
+        # fmt: off
+        aim_matrix = om.MMatrix(
+            [
+                up_vector.x,   up_vector.y,   up_vector.z,   0,
+                aim_vector.x,  aim_vector.y,  aim_vector.z,  0,
+                last_vector.x, last_vector.y, last_vector.z, 0,
+                origin.x,      origin.y,      origin.z,      1,
+            ]
+        )
+        # fmt: on
+        return aim_matrix
+
+    def _get_height(self, obj_path):
+        origin = self._get_origin(obj_path)
+        target = self._get_target(obj_path)
+
+        aim_vector = om.MVector(target - origin)
+
+        return aim_vector.length()
+
+    def _generate_points(self, data, obj_path):
+        aim_matrix = self._get_aim_matrix(obj_path)
+        height = self._get_height(obj_path)
+        radius = VectorHelperDrawOverride._get_radius(obj_path)
         subdivisions = VectorHelperDrawOverride.subdivisions
         angle_offset = math.pi * 2 / subdivisions
+        cylinder_height = max(0, height - radius * 3)
 
-        data.points.append(om.MPoint(0, 0, 0))
+        data.points.append(om.MPoint(0, 0, 0) * aim_matrix)
         # first circle
         for i in range(subdivisions):
             angle = i * angle_offset
             x = math.cos(angle) * radius
             y = 0
             z = math.sin(angle) * radius
-            data.points.append(om.MPoint(x, y, z))
+            data.points.append(om.MPoint(x, y, z) * aim_matrix)
 
         # second circle
         for i in range(subdivisions):
@@ -111,7 +154,7 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
             x = math.cos(angle) * radius
             y = cylinder_height
             z = math.sin(angle) * radius
-            data.points.append(om.MPoint(x, y, z))
+            data.points.append(om.MPoint(x, y, z) * aim_matrix)
 
         # third circle
         for i in range(subdivisions):
@@ -119,10 +162,13 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
             x = math.cos(angle) * radius * 2
             y = cylinder_height
             z = math.sin(angle) * radius * 2
-            data.points.append(om.MPoint(x, y, z))
+            data.points.append(om.MPoint(x, y, z) * aim_matrix)
 
-        data.points.append(om.MPoint(0, height, 0))
+        data.points.append(om.MPoint(0, height, 0) * aim_matrix)
+        return data
 
+    def _generate_triangles(self, data):
+        subdivisions = VectorHelperDrawOverride.subdivisions
         for i in range(len(data.points) - 1):
             data.lines_indices.append(i)
             data.lines_indices.append(i + 1)
@@ -233,19 +279,30 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
         return VectorHelperDrawOverride(obj)
 
     @staticmethod
-    def _get_radius(obj_path):
+    def _get_origin(obj_path):
         node = obj_path.node()
-        plug = om.MPlug(node, VectorHelperNode.radius)
-        value = 1.0
-        if not plug.isNull:
-            value = plug.asMDistance().asCentimeters()
+        plug = om.MPlug(node, VectorHelperNode.origin)
+        x = plug.child(0).asFloat()
+        y = plug.child(1).asFloat()
+        z = plug.child(2).asFloat()
+        value = om.MPoint((x, y, z))
 
         return value
 
     @staticmethod
-    def _get_height(obj_path):
+    def _get_target(obj_path):
         node = obj_path.node()
-        plug = om.MPlug(node, VectorHelperNode.height)
+        plug = om.MPlug(node, VectorHelperNode.target)
+        x = plug.child(0).asFloat()
+        y = plug.child(1).asFloat()
+        z = plug.child(2).asFloat()
+        value = om.MPoint((x, y, z))
+        return value
+
+    @staticmethod
+    def _get_radius(obj_path):
+        node = obj_path.node()
+        plug = om.MPlug(node, VectorHelperNode.radius)
         value = 1.0
         if not plug.isNull:
             value = plug.asMDistance().asCentimeters()
@@ -324,15 +381,32 @@ if __name__ == "__main__":
 
     plugin_name = "maya_rigging_helpers.py"
 
-    cmds.evalDeferred(
-        'if cmds.pluginInfo("{0}", q=True, loaded=True): cmds.unloadPlugin("{0}")'.format(
-            plugin_name
-        )
-    )
-    cmds.evalDeferred(
-        'if not cmds.pluginInfo("{0}", q=True, loaded=True): cmds.loadPlugin("{0}")'.format(
-            plugin_name
-        )
-    )
+    # cmds.evalDeferred(
+    #     'if cmds.pluginInfo("{0}", q=True, loaded=True): cmds.unloadPlugin("{0}")'.format(
+    #         plugin_name
+    #     )
+    # )
+    # cmds.evalDeferred(
+    #     'if not cmds.pluginInfo("{0}", q=True, loaded=True): cmds.loadPlugin("{0}")'.format(
+    #         plugin_name
+    #     )
+    # )
+    script = """
+vector_helper = cmds.createNode("vectorHelper")
+loc1 = cmds.spaceLocator()[0]
+loc2 = cmds.spaceLocator()[0]
+"""
+    # cmds.evalDeferred(script)
 
-    cmds.evalDeferred('cmds.createNode("vectorHelper")')
+    if cmds.pluginInfo(plugin_name, q=True, loaded=True):
+        cmds.unloadPlugin(plugin_name)
+    if not cmds.pluginInfo(plugin_name, q=True, loaded=True):
+        cmds.loadPlugin(plugin_name)
+
+    vector_helper = cmds.createNode("vectorHelper")
+    loc1 = cmds.spaceLocator()[0]
+    loc2 = cmds.spaceLocator()[0]
+
+    cmds.connectAttr("locator1.translate", "vectorHelper1.origin")
+    cmds.connectAttr("locator2.translate", "vectorHelper1.target")
+
