@@ -2,13 +2,11 @@ from __future__ import print_function
 
 import logging
 import math
-from math import log
 
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaRender as omr
 import maya.api.OpenMayaUI as omui
 from mrh.plugins import HelperData
-from mrh.plugins.angle_helper import AngleHelperNode
 
 logger = logging.getLogger(__name__)
 
@@ -191,25 +189,25 @@ class AngleConeHelperDrawOverride(omr.MPxDrawOverride):
 def register(plugin_fn):
     try:
         plugin_fn.registerNode(
-            AngleConeHelperNode.TYPE_NAME,  # name of the node
-            AngleConeHelperNode.TYPE_ID,  # unique id that identifies node
-            AngleConeHelperNode.creator,  # function/method that returns new instance of class
-            AngleConeHelperNode.initialize,  # function/method that will initialize all attributes of node
-            om.MPxNode.kLocatorNode,  # type of node to be registered
-            AngleConeHelperNode.DRAW_CLASSIFICATION,  # draw-specific classification string (VP2.0)
+            AngleConeHelperNode.TYPE_NAME,
+            AngleConeHelperNode.TYPE_ID,
+            AngleConeHelperNode.creator,
+            AngleConeHelperNode.initialize,
+            om.MPxNode.kLocatorNode,
+            AngleConeHelperNode.DRAW_CLASSIFICATION,
         )
-    except:
+    except BaseException:
         logger.error(
             "Failed to register node: {0}".format(AngleConeHelperNode.TYPE_NAME)
         )
 
     try:
         omr.MDrawRegistry.registerDrawOverrideCreator(
-            AngleConeHelperNode.DRAW_CLASSIFICATION,  # draw-specific classification
-            AngleConeHelperNode.DRAW_REGISTRANT_ID,  # unique name to identify registration
-            AngleConeHelperDrawOverride.creator,  # function/method that returns new instance of class
+            AngleConeHelperNode.DRAW_CLASSIFICATION,
+            AngleConeHelperNode.DRAW_REGISTRANT_ID,
+            AngleConeHelperDrawOverride.creator,
         )
-    except:
+    except BaseException:
         logger.error(
             "Failed to register draw override: {0}".format(
                 AngleConeHelperDrawOverride.NAME
@@ -223,7 +221,7 @@ def deregister(plugin_fn):
             AngleConeHelperNode.DRAW_CLASSIFICATION,
             AngleConeHelperNode.DRAW_REGISTRANT_ID,
         )
-    except:
+    except BaseException:
         logger.error(
             "Failed to deregister draw override: {0}".format(
                 AngleConeHelperDrawOverride.NAME
@@ -233,7 +231,7 @@ def deregister(plugin_fn):
     try:
 
         plugin_fn.deregisterNode(AngleConeHelperNode.TYPE_ID)
-    except:
+    except BaseException:
         logger.error(
             "Failed to deregister node: {0}".format(AngleConeHelperNode.TYPE_NAME)
         )
@@ -246,16 +244,10 @@ if __name__ == "__main__":
 
     plugin_name = "maya_rigging_helpers.py"
 
-    cmds.evalDeferred(
-        'if cmds.pluginInfo("{0}", q=True, loaded=True): cmds.unloadPlugin("{0}")'.format(
-            plugin_name
-        )
-    )
-    cmds.evalDeferred(
-        'if not cmds.pluginInfo("{0}", q=True, loaded=True): cmds.loadPlugin("{0}")'.format(
-            plugin_name
-        )
-    )
+    if cmds.pluginInfo(plugin_name, q=True, loaded=True):
+        cmds.unloadPlugin(plugin_name)
+    if not cmds.pluginInfo(plugin_name, q=True, loaded=True):
+        cmds.loadPlugin(plugin_name)
 
-    cmds.evalDeferred('cmds.createNode("angleConeHelper")')
-    cmds.evalDeferred('cmds.setAttr("angleConeHelper1.angle", 45)')
+    cmds.createNode("angleConeHelper")
+    cmds.setAttr("angleConeHelper1.angle", 45)

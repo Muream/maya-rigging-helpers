@@ -329,23 +329,23 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
 def register(plugin_fn):
     try:
         plugin_fn.registerNode(
-            VectorHelperNode.TYPE_NAME,  # name of the node
-            VectorHelperNode.TYPE_ID,  # unique id that identifies node
-            VectorHelperNode.creator,  # function/method that returns new instance of class
-            VectorHelperNode.initialize,  # function/method that will initialize all attributes of node
-            om.MPxNode.kLocatorNode,  # type of node to be registered
-            VectorHelperNode.DRAW_CLASSIFICATION,  # draw-specific classification string (VP2.0)
+            VectorHelperNode.TYPE_NAME,
+            VectorHelperNode.TYPE_ID,
+            VectorHelperNode.creator,
+            VectorHelperNode.initialize,
+            om.MPxNode.kLocatorNode,
+            VectorHelperNode.DRAW_CLASSIFICATION,
         )
-    except:
+    except Exception:
         logger.error("Failed to register node: {0}".format(VectorHelperNode.TYPE_NAME))
 
     try:
         omr.MDrawRegistry.registerDrawOverrideCreator(
-            VectorHelperNode.DRAW_CLASSIFICATION,  # draw-specific classification
-            VectorHelperNode.DRAW_REGISTRANT_ID,  # unique name to identify registration
-            VectorHelperDrawOverride.creator,  # function/method that returns new instance of class
+            VectorHelperNode.DRAW_CLASSIFICATION,
+            VectorHelperNode.DRAW_REGISTRANT_ID,
+            VectorHelperDrawOverride.creator,
         )
-    except:
+    except Exception:
         logger.error(
             "Failed to register draw override: {0}".format(
                 VectorHelperDrawOverride.NAME
@@ -358,7 +358,7 @@ def deregister(plugin_fn):
         omr.MDrawRegistry.deregisterDrawOverrideCreator(
             VectorHelperNode.DRAW_CLASSIFICATION, VectorHelperNode.DRAW_REGISTRANT_ID,
         )
-    except:
+    except Exception:
         logger.error(
             "Failed to deregister draw override: {0}".format(
                 VectorHelperDrawOverride.NAME
@@ -368,7 +368,7 @@ def deregister(plugin_fn):
     try:
 
         plugin_fn.deregisterNode(VectorHelperNode.TYPE_ID)
-    except:
+    except Exception:
         logger.error(
             "Failed to deregister node: {0}".format(VectorHelperNode.TYPE_NAME)
         )
@@ -381,23 +381,6 @@ if __name__ == "__main__":
 
     plugin_name = "maya_rigging_helpers.py"
 
-    # cmds.evalDeferred(
-    #     'if cmds.pluginInfo("{0}", q=True, loaded=True): cmds.unloadPlugin("{0}")'.format(
-    #         plugin_name
-    #     )
-    # )
-    # cmds.evalDeferred(
-    #     'if not cmds.pluginInfo("{0}", q=True, loaded=True): cmds.loadPlugin("{0}")'.format(
-    #         plugin_name
-    #     )
-    # )
-    script = """
-vector_helper = cmds.createNode("vectorHelper")
-loc1 = cmds.spaceLocator()[0]
-loc2 = cmds.spaceLocator()[0]
-"""
-    # cmds.evalDeferred(script)
-
     if cmds.pluginInfo(plugin_name, q=True, loaded=True):
         cmds.unloadPlugin(plugin_name)
     if not cmds.pluginInfo(plugin_name, q=True, loaded=True):
@@ -409,4 +392,3 @@ loc2 = cmds.spaceLocator()[0]
 
     cmds.connectAttr("locator1.translate", "vectorHelper1.origin")
     cmds.connectAttr("locator2.translate", "vectorHelper1.target")
-

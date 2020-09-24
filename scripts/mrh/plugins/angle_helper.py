@@ -265,23 +265,23 @@ class AngleHelperDrawOverride(omr.MPxDrawOverride):
 def register(plugin_fn):
     try:
         plugin_fn.registerNode(
-            AngleHelperNode.TYPE_NAME,  # name of the node
-            AngleHelperNode.TYPE_ID,  # unique id that identifies node
-            AngleHelperNode.creator,  # function/method that returns new instance of class
-            AngleHelperNode.initialize,  # function/method that will initialize all attributes of node
-            om.MPxNode.kLocatorNode,  # type of node to be registered
-            AngleHelperNode.DRAW_CLASSIFICATION,  # draw-specific classification string (VP2.0)
+            AngleHelperNode.TYPE_NAME,
+            AngleHelperNode.TYPE_ID,
+            AngleHelperNode.creator,
+            AngleHelperNode.initialize,
+            om.MPxNode.kLocatorNode,
+            AngleHelperNode.DRAW_CLASSIFICATION,
         )
-    except:
+    except Exception:
         logger.error("Failed to register node: {0}".format(AngleHelperNode.TYPE_NAME))
 
     try:
         omr.MDrawRegistry.registerDrawOverrideCreator(
-            AngleHelperNode.DRAW_CLASSIFICATION,  # draw-specific classification
-            AngleHelperNode.DRAW_REGISTRANT_ID,  # unique name to identify registration
-            AngleHelperDrawOverride.creator,  # function/method that returns new instance of class
+            AngleHelperNode.DRAW_CLASSIFICATION,
+            AngleHelperNode.DRAW_REGISTRANT_ID,
+            AngleHelperDrawOverride.creator,
         )
-    except:
+    except Exception:
         logger.error(
             "Failed to register draw override: {0}".format(AngleHelperDrawOverride.NAME)
         )
@@ -292,7 +292,7 @@ def deregister(plugin_fn):
         omr.MDrawRegistry.deregisterDrawOverrideCreator(
             AngleHelperNode.DRAW_CLASSIFICATION, AngleHelperNode.DRAW_REGISTRANT_ID,
         )
-    except:
+    except Exception:
         logger.error(
             "Failed to deregister draw override: {0}".format(
                 AngleHelperDrawOverride.NAME
@@ -300,9 +300,8 @@ def deregister(plugin_fn):
         )
 
     try:
-
         plugin_fn.deregisterNode(AngleHelperNode.TYPE_ID)
-    except:
+    except Exception:
         logger.error("Failed to deregister node: {0}".format(AngleHelperNode.TYPE_NAME))
 
 
@@ -313,16 +312,10 @@ if __name__ == "__main__":
 
     plugin_name = "maya_rigging_helpers.py"
 
-    cmds.evalDeferred(
-        'if cmds.pluginInfo("{0}", q=True, loaded=True): cmds.unloadPlugin("{0}")'.format(
-            plugin_name
-        )
-    )
-    cmds.evalDeferred(
-        'if not cmds.pluginInfo("{0}", q=True, loaded=True): cmds.loadPlugin("{0}")'.format(
-            plugin_name
-        )
-    )
+    if cmds.pluginInfo(plugin_name, q=True, loaded=True):
+        cmds.unloadPlugin(plugin_name)
+    if not cmds.pluginInfo(plugin_name, q=True, loaded=True):
+        cmds.loadPlugin(plugin_name)
 
-    cmds.evalDeferred('cmds.createNode("angleHelper")')
-    cmds.evalDeferred('cmds.setAttr("angleHelper1.angle2", 90)')
+    cmds.createNode("angleHelper")
+    cmds.setAttr("angleHelper1.angle2", 90)
