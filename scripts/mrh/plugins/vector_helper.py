@@ -6,7 +6,8 @@ import math
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaRender as omr
 import maya.api.OpenMayaUI as omui
-from mrh.plugins import HelperData
+from mrh.plugins import HelperData, get_aim_matrix
+
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class VectorHelperNode(omui.MPxLocatorNode):
     radius = None
 
     origin = None
+    target = None
 
     colorR = None
     colorG = None
@@ -80,6 +82,9 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
     def __init__(self, obj):
         super(VectorHelperDrawOverride, self).__init__(obj, None, True)
 
+    def isTransparent(*args, **kwargs):
+        return True
+
     def prepareForDraw(self, obj_path, camera_path, frame_context, old_data):
         data = old_data
         if not isinstance(data, HelperData):
@@ -97,32 +102,6 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
 
         return data
 
-    def _get_aim_matrix(self, obj_path):
-        origin = self._get_origin(obj_path)
-        target = self._get_target(obj_path)
-
-        aim_vector = om.MVector(target - origin).normalize()
-
-        world_up = om.MGlobal.upAxis()
-        if aim_vector.isParallel(world_up):
-            world_up.x += 1
-            world_up.normalize()
-
-        up_vector = (aim_vector ^ world_up).normalize()
-        last_vector = (aim_vector ^ up_vector).normalize()
-
-        # fmt: off
-        aim_matrix = om.MMatrix(
-            [
-                up_vector.x,   up_vector.y,   up_vector.z,   0,
-                aim_vector.x,  aim_vector.y,  aim_vector.z,  0,
-                last_vector.x, last_vector.y, last_vector.z, 0,
-                origin.x,      origin.y,      origin.z,      1,
-            ]
-        )
-        # fmt: on
-        return aim_matrix
-
     def _get_height(self, obj_path):
         origin = self._get_origin(obj_path)
         target = self._get_target(obj_path)
@@ -132,12 +111,15 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
         return aim_vector.length()
 
     def _generate_points(self, data, obj_path):
-        aim_matrix = self._get_aim_matrix(obj_path)
+        origin = self._get_origin(obj_path)
+        target = self._get_target(obj_path)
+        aim_matrix = get_aim_matrix(origin, target)
         height = self._get_height(obj_path)
+
         radius = VectorHelperDrawOverride._get_radius(obj_path)
         subdivisions = VectorHelperDrawOverride.subdivisions
         angle_offset = math.pi * 2 / subdivisions
-        cylinder_height = max(0, height - radius * 3)
+        cylinder_height = max(0, height - radius * 5)
 
         data.points.append(om.MPoint(0, 0, 0) * aim_matrix)
         # first circle
@@ -159,9 +141,9 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
         # third circle
         for i in range(subdivisions):
             angle = i * angle_offset
-            x = math.cos(angle) * radius * 2
+            x = math.cos(angle) * radius * 3
             y = cylinder_height
-            z = math.sin(angle) * radius * 2
+            z = math.sin(angle) * radius * 3
             data.points.append(om.MPoint(x, y, z) * aim_matrix)
 
         data.points.append(om.MPoint(0, height, 0) * aim_matrix)
@@ -285,9 +267,8 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
         x = plug.child(0).asFloat()
         y = plug.child(1).asFloat()
         z = plug.child(2).asFloat()
-        value = om.MPoint((x, y, z))
 
-        return value
+        return om.MPoint((x, y, z))
 
     @staticmethod
     def _get_target(obj_path):
@@ -296,8 +277,8 @@ class VectorHelperDrawOverride(omr.MPxDrawOverride):
         x = plug.child(0).asFloat()
         y = plug.child(1).asFloat()
         z = plug.child(2).asFloat()
-        value = om.MPoint((x, y, z))
-        return value
+
+        return om.MPoint((x, y, z))
 
     @staticmethod
     def _get_radius(obj_path):
@@ -389,6 +370,7 @@ if __name__ == "__main__":
     vector_helper = cmds.createNode("vectorHelper")
     loc1 = cmds.spaceLocator()[0]
     loc2 = cmds.spaceLocator()[0]
+    cmds.setAttr("locator2.translateY", 1)
 
     cmds.connectAttr("locator1.translate", "vectorHelper1.origin")
     cmds.connectAttr("locator2.translate", "vectorHelper1.target")

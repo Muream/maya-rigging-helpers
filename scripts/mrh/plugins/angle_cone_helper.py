@@ -6,7 +6,7 @@ import math
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaRender as omr
 import maya.api.OpenMayaUI as omui
-from mrh.plugins import HelperData
+from mrh.plugins import HelperData, get_aim_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,11 @@ class AngleConeHelperNode(omui.MPxLocatorNode):
     DRAW_CLASSIFICATION = "drawdb/geometry/angleConeHelper"
     DRAW_REGISTRANT_ID = "AngleConeHelperNode"
 
-    height = None
     angle = None
+
+    origin = None
+    target = None
+
     colorR = None
     colorG = None
     colorB = None
@@ -33,13 +36,6 @@ class AngleConeHelperNode(omui.MPxLocatorNode):
     @classmethod
     def initialize(cls):
         unitFn = om.MFnUnitAttribute()
-        AngleConeHelperNode.height = unitFn.create(
-            "height", "h", om.MFnUnitAttribute.kDistance
-        )
-        unitFn.default = om.MDistance(1)
-        unitFn.setMin(om.MDistance(0))
-        unitFn.channelBox = True
-        om.MPxNode.addAttribute(AngleConeHelperNode.height)
 
         AngleConeHelperNode.angle = unitFn.create(
             "angle", "a", om.MFnUnitAttribute.kAngle
@@ -51,6 +47,15 @@ class AngleConeHelperNode(omui.MPxLocatorNode):
         om.MPxNode.addAttribute(AngleConeHelperNode.angle)
 
         numericFn = om.MFnNumericAttribute()
+
+        AngleConeHelperNode.origin = numericFn.createPoint("origin", "o")
+        numericFn.channelBox = True
+        om.MPxNode.addAttribute(AngleConeHelperNode.origin)
+
+        AngleConeHelperNode.target = numericFn.createPoint("target", "t")
+        numericFn.channelBox = True
+        om.MPxNode.addAttribute(AngleConeHelperNode.target)
+
         AngleConeHelperNode.colorR = numericFn.create(
             "colorR", "cr", om.MFnNumericData.kFloat, 1
         )
@@ -73,6 +78,8 @@ class AngleConeHelperNode(omui.MPxLocatorNode):
 class AngleConeHelperDrawOverride(omr.MPxDrawOverride):
     NAME = "AngleConeHelperDrawOverride"
 
+    subdivisions = 100
+
     def __init__(self, obj):
         super(AngleConeHelperDrawOverride, self).__init__(obj, None, True)
 
@@ -89,39 +96,63 @@ class AngleConeHelperDrawOverride(omr.MPxDrawOverride):
         data.triangles_indices = []
         data.lines_indices = []
 
-        height = AngleConeHelperDrawOverride._get_height(obj_path)
+        data = self._generate_points(data, obj_path)
+        data = self._generate_lines(data)
+        data = self._generate_triangles(data)
+        return data
+
+    def _generate_points(self, data, obj_path):
+        origin = self._get_origin(obj_path)
+        target = self._get_target(obj_path)
+        aim_matrix = get_aim_matrix(origin, target)
+        height = self._get_height(obj_path)
+
         angle = AngleConeHelperDrawOverride._get_angle(obj_path)
         radius = math.tan(angle.asRadians() / 2) * height
+        angle_offset = math.pi * 2 / self.subdivisions
 
-        subdivisions = 100
-
-        angle_offset = math.pi * 2 / subdivisions
-
-        data.points.append(om.MPoint(0, 0, 0))
-        for i in range(subdivisions + 1):
+        data.points.append(om.MPoint(0, 0, 0) * aim_matrix)
+        for i in range(self.subdivisions + 1):
             angle = i * angle_offset
             x = math.cos(angle) * radius
             y = height
             z = math.sin(angle) * radius
-            data.points.append(om.MPoint(x, y, z))
+            data.points.append(om.MPoint(x, y, z) * aim_matrix)
 
-        for i in range(subdivisions):
+        return data
+
+    def _generate_lines(self, data):
+        for i in range(self.subdivisions):
             data.lines_indices.append(0)
             data.lines_indices.append(i + 1)
             data.lines_indices.append(i + 1)
             data.lines_indices.append(i + 2)
 
-        for i in range(subdivisions):
+        return data
+
+    def _generate_triangles(self, data):
+        for i in range(self.subdivisions):
             data.triangles_indices.append(0)
             data.triangles_indices.append(i + 1)
             data.triangles_indices.append(i + 2)
 
         return data
 
+    def _get_height(self, obj_path):
+        origin = self._get_origin(obj_path)
+        target = self._get_target(obj_path)
+
+        aim_vector = om.MVector(target - origin)
+
+        return aim_vector.length()
+
     def supportedDrawAPIs(self):
         return omr.MRenderer.kAllDevices
 
     def hasUIDrawables(self):
+        return True
+
+    def isTransparent(*args, **kwargs):
         return True
 
     def addUIDrawables(self, obj_path, draw_manager, frame_context, data):
@@ -149,15 +180,31 @@ class AngleConeHelperDrawOverride(omr.MPxDrawOverride):
     def creator(cls, obj):
         return AngleConeHelperDrawOverride(obj)
 
-    @staticmethod
-    def _get_height(obj_path):
-        node = obj_path.node()
-        plug = om.MPlug(node, AngleConeHelperNode.height)
-        value = 1.0
-        if not plug.isNull:
-            value = plug.asMDistance().asCentimeters()
+    def _get_aim_matrix(self, obj_path):
+        origin = self._get_origin(obj_path)
+        target = self._get_target(obj_path)
 
-        return value
+        aim_vector = om.MVector(target - origin).normalize()
+
+        world_up = om.MGlobal.upAxis()
+        if aim_vector.isParallel(world_up):
+            world_up.x += 1
+            world_up.normalize()
+
+        up_vector = (aim_vector ^ world_up).normalize()
+        last_vector = (aim_vector ^ up_vector).normalize()
+
+        # fmt: off
+        aim_matrix = om.MMatrix(
+            [
+                up_vector.x,   up_vector.y,   up_vector.z,   0,
+                aim_vector.x,  aim_vector.y,  aim_vector.z,  0,
+                last_vector.x, last_vector.y, last_vector.z, 0,
+                origin.x,      origin.y,      origin.z,      1,
+            ]
+        )
+        # fmt: on
+        return aim_matrix
 
     @staticmethod
     def _get_angle(obj_path):
@@ -168,6 +215,26 @@ class AngleConeHelperDrawOverride(omr.MPxDrawOverride):
             value = plug.asMAngle()
 
         return value
+
+    @staticmethod
+    def _get_origin(obj_path):
+        node = obj_path.node()
+        plug = om.MPlug(node, AngleConeHelperNode.origin)
+        x = plug.child(0).asFloat()
+        y = plug.child(1).asFloat()
+        z = plug.child(2).asFloat()
+
+        return om.MPoint((x, y, z))
+
+    @staticmethod
+    def _get_target(obj_path):
+        node = obj_path.node()
+        plug = om.MPlug(node, AngleConeHelperNode.target)
+        x = plug.child(0).asFloat()
+        y = plug.child(1).asFloat()
+        z = plug.child(2).asFloat()
+
+        return om.MPoint((x, y, z))
 
     @staticmethod
     def _get_color(obj_path):
@@ -250,4 +317,11 @@ if __name__ == "__main__":
         cmds.loadPlugin(plugin_name)
 
     cmds.createNode("angleConeHelper")
+    loc1 = cmds.spaceLocator()[0]
+    loc2 = cmds.spaceLocator()[0]
+    cmds.setAttr("locator2.translateY", 1)
+
     cmds.setAttr("angleConeHelper1.angle", 45)
+    cmds.connectAttr("locator1.translate", "angleConeHelper1.origin")
+    cmds.connectAttr("locator2.translate", "angleConeHelper1.target")
+

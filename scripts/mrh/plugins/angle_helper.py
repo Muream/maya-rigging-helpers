@@ -28,8 +28,8 @@ class AngleHelperNode(omui.MPxLocatorNode):
     def __init__(self):
         super(AngleHelperNode, self).__init__()
 
-    @classmethod
-    def creator(cls):
+    @staticmethod
+    def creator():
         return AngleHelperNode()
 
     @classmethod
