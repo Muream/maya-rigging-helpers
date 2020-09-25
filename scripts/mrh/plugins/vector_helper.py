@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class VectorHelperNode(omui.MPxLocatorNode):
     TYPE_NAME = "vectorHelper"
-    TYPE_ID = om.MTypeId(0x0007F76E)
+    TYPE_ID = om.MTypeId(0x00136202)
     DRAW_CLASSIFICATION = "drawdb/geometry/vectorHelper"
     DRAW_REGISTRANT_ID = "VectorHelperNode"
 

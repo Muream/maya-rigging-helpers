@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class AngleHelperNode(omui.MPxLocatorNode):
     TYPE_NAME = "angleHelper"
-    TYPE_ID = om.MTypeId(0x0007F7F8)
+    TYPE_ID = om.MTypeId(0x00136200)
     DRAW_CLASSIFICATION = "drawdb/geometry/angleHelper"
     DRAW_REGISTRANT_ID = "AngleHelperNode"
 
